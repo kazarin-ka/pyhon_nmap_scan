@@ -59,7 +59,7 @@ And change it as desired for Your task
 To start it's very simple - call the Python3 interpreter, provide the script name and Ip address of the host or network
 
 ```
-python3 main.py 10.62.0.0/19
+python3 nmvlscan.py 10.62.0.0/19
 ```
 
 ### Reading logs
