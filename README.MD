@@ -1,4 +1,4 @@
-# LAB Nmap scanner
+# Vuln. Nmap scanner
 
 Utility that allows you to scan a host/network for vulnerabilities using nmap and save the result to a file
 
