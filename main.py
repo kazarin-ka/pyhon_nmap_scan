@@ -6,28 +6,30 @@ For example - wannacry's vulnerability:
 https://gist.github.com/Neo23x0/60268852ff3a5776ef66bc15d50a024a
 
 """
-import nmvlscan_lib as lib
-import configparser
-import os
-import sys
-from netaddr import IPNetwork
-import subprocess
+import nmvlscan_lib as lib  # my lib with diffrenent fuctions
+from configparser import RawConfigParser # lib for config reading
+from os import path
+from sys import (exit, argv)
+from netaddr import IPNetwork   # lib for host/network ip working
+from subprocess import (Popen, PIPE)
 # pip install dnspython
-from dns import resolver
-from dns import reversename
+from dns import (resolver, reversename)
+from tqdm import tqdm   # lib for progress bar
+from time import sleep
+from datetime import datetime
 
 # config.ini file must be near the script!
 # we check it:
-if not (os.path.exists("config.ini") and os.path.isfile("config.ini")):
+if not (path.exists("config.ini") and path.isfile("config.ini")):
     lib.error_exit("There is no config.ini file there!")
 
 # if it is, we parse config and read values
 else:
-    nmap_conf = configparser.RawConfigParser()
+    nmap_conf = RawConfigParser()
     nmap_conf.read("config.ini")
 
 # if user forget ro enter ip or subnet
-if len(sys.argv) < 2:
+if len(argv) < 2:
     # we print help and exit
     lib.print_help()
     lib.error_exit("You forgot to specify the IP address!")
@@ -63,14 +65,22 @@ nmap_run_cmd = "nmap -sC -p%s  -n --open --max-hostgroup %s --max-parallelism %s
                (scan_port, max_hostgroup, max_parallelism, max_rate, debug, script_name)
 
 # let's scan and create dictionary with results:
-print("Start scanning!")
+print("Start scanning...")
 scan_results = dict()
 
 grep_sting = nmap_conf.get("search", "grep_string")
 
-for ip in IPNetwork(sys.argv[1]):
+# calculate count of ip's addr to create progress bar
+scan_network=IPNetwork(argv[1])
+ip_count=len(list(scan_network))
+
+# initiate progress bar
+pbar = tqdm(total=ip_count)
+
+# start scanning..
+for ip in scan_network:
     host_scan_cmd = nmap_run_cmd + ' ' + str(ip) + ' 2>/dev/null | grep ' + grep_sting + ' | cut -f 2 -d ":"'
-    host_scan_res = str(subprocess.Popen(host_scan_cmd, shell=True, stdout=subprocess.PIPE).communicate()[0][:-1])[2:][:-1]
+    host_scan_res = str(Popen(host_scan_cmd, shell=True, stdout=PIPE).communicate()[0][:-1])[2:][:-1]
 
     # config dns resolver
     dns_resolver = resolver.Resolver()
@@ -85,19 +95,36 @@ for ip in IPNetwork(sys.argv[1]):
 
     # add entry about host and scan result into dictionary
     scan_results[ip] = [host_scan_name, host_scan_res]
+    pbar.update(1)
 
-print("Scan completed! Creating log...")
+pbar.close()
+
+sleep(1) # progress bar should have time to unsubscribe
+print("Scan completed! \n Creating log...")
+
+# get now time
+now_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+
 # we finished scan network, let's create report!
-logfile = open(nmap_conf.get("files", "report_log_file"), 'w')
-
+log_filename = nmap_conf.get("files", "report_log_file_name") + '_' + now_time + '.log'
+logfile = open(log_filename, 'w')
 srch_message = nmap_conf.get("search", "status")
 
+# initiate progress bar
+pbar = tqdm(total=ip_count)
+
+# start write scan log to file
 for host in scan_results:
     if (srch_message in scan_results[host][1]):
         logfile.write("ip:%s | hostname:%s | status:%s \n" % (host, scan_results[host][0], scan_results[host][1] ))
+    pbar.update(1)
 
 logfile.close()
-print("All works were done! See %s for results" % logfile)
-sys.exit(0)
+pbar.close()
+
+sleep(1) # progress bar should have time to unsubscribe
+
+print("All works were done! \n See %s for results" % log_filename)
+exit(0)
 
 
